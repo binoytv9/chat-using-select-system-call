@@ -6,7 +6,7 @@
 #include<sys/time.h>
 #include<sys/types.h>
 
-#define SEC  1
+#define SEC  0
 #define USEC 0
 #define MAXLEN 100
 #define MYPORT "8001"
@@ -69,8 +69,8 @@ int main()
     }
 
     while(1){
-
         FD_ZERO(&readset);
+        FD_SET(0, &readset);
         FD_SET(sockfd, &readset);
 
         tv.tv_sec = SEC;
@@ -81,48 +81,40 @@ int main()
             exit(1);
         }
         else if(result){
-            if((numBytes = recvfrom(sockfd, msg, MAXLEN-1, 0, NULL, NULL)) == -1){
-                perror("recvfrom");
-                exit(1);
+            if(FD_ISSET(sockfd, &readset)){
+                if((numBytes = recvfrom(sockfd, msg, MAXLEN-1, 0, NULL, NULL)) == -1){
+                    perror("recvfrom");
+                    exit(1);
+                }
+                else if(numBytes == 0){
+                    printf("\nconnection closed by partner! exiting....\n\n");
+                    close(sockfd);
+                    break;
+                }
+                msg[numBytes] = '\0';
+                printf("p2>>> %s\n", msg);
             }
-            else if(numBytes == 0){
-                printf("\nconnection closed by partner! exiting....\n\n");
-                close(sockfd);
-                break;
-            }
-            msg[numBytes] = '\0';
-            printf("p2>>> %s\n", msg);
-        }
 
-        FD_ZERO(&readset);
-        FD_SET(0, &readset);
+            terminate = 0;
+            if(FD_ISSET(0, &readset)){
+                if(fgets(msg, MAXLEN, stdin) == NULL)
+                    terminate = 1;
 
-        tv.tv_sec = SEC;
-        tv.tv_usec = USEC;
+                if(strcmp(msg, "\n") == 0)
+                    continue;
 
-        terminate = 0;
-        if((result = select(1, &readset, NULL, NULL, &tv)) == -1){
-            perror("select2");
-            exit(1);
-        }
-        else if(result){
-            if(fgets(msg, MAXLEN, stdin) == NULL)
-                terminate = 1;
-
-            if(strcmp(msg, "\n") == 0)
-                continue;
-
-            if(terminate)
-                msg[0] = '\0';
-            else
-                msg[strlen(msg)-1] = '\0';
-            if((numBytes = sendto(sockfd, msg, strlen(msg), 0, partnerinfo->ai_addr, partnerinfo->ai_addrlen)) == -1){
-                perror("sendto");
-                exit(1);
-            }
-            if(terminate){
-                printf("\nconnection closed! exiting....\n\n");
-                break;
+                if(terminate)
+                    msg[0] = '\0';
+                else
+                    msg[strlen(msg)-1] = '\0';
+                if((numBytes = sendto(sockfd, msg, strlen(msg), 0, partnerinfo->ai_addr, partnerinfo->ai_addrlen)) == -1){
+                    perror("sendto");
+                    exit(1);
+                }
+                if(terminate){
+                    printf("\nconnection closed! exiting....\n\n");
+                    break;
+                }
             }
         }
     }
